@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react' // or @vitejs/plugin-vue if using Vue
+import react from '@vitejs/plugin-react' // or whatever framework you are using
 
 export default defineConfig({
   plugins: [react()],
-  // Replace 'VITspotCheckFinal' with your exact GitHub repository name
+  // Add this base property!
   base: '/VITspotCheckFinal/', 
 })
