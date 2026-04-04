@@ -18,10 +18,11 @@ export interface AuthUser {
   isVITStudent: boolean
   registrationNumber?: string
   karma: number
-  trustTier: "newcomer" | "verified" | "trusted" | "elite" | string
+  trustTier: "OBSERVER" | "SPOTTER" | "NAVIGATOR" | "ARCHITECT" | "ORACLE" | string
   verificationsCount: number
   joinedAt: string
   isGuest?: boolean
+  lastKarmaUpdate?: { delta: number; reason: string; timestamp: number }
 }
 
 interface AuthState {
@@ -30,12 +31,29 @@ interface AuthState {
   isLoading: boolean
   showAuthModal: boolean
   karmaEvents: KarmaEvent[]
-  lastKarmaUpdate: KarmaEvent | null
+  lastKarmaUpdate: { delta: number; reason: string; timestamp: number } | null
   setUser: (user: AuthUser | null) => void
   setIsLoading: (loading: boolean) => void
   setShowAuthModal: (show: boolean) => void
   logout: () => void
   addKarma: (amount: number, reason: string) => Promise<void>
+  updateUser: (data: Partial<AuthUser>) => void
+}
+
+export const TRUST_TIERS = {
+  OBSERVER: { range: "0–99", color: "#6B7280", label: "OBSERVER" },
+  SPOTTER: { range: "100–499", color: "#00FF94", label: "SPOTTER" },
+  NAVIGATOR: { range: "500–1499", color: "#00E5FF", label: "NAVIGATOR" },
+  ARCHITECT: { range: "1500–2999", color: "#B14FFF", label: "ARCHITECT" },
+  ORACLE: { range: "3000+", color: "#FFB830", label: "ORACLE" },
+}
+
+export function getTierForKarma(karma: number): string {
+    if (karma >= 3000) return "ORACLE";
+    if (karma >= 1500) return "ARCHITECT";
+    if (karma >= 500) return "NAVIGATOR";
+    if (karma >= 100) return "SPOTTER";
+    return "OBSERVER";
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -54,6 +72,11 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: !!user,
         }),
 
+      updateUser: (data) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...data } : null,
+        })),
+
       setIsLoading: (loading) => set({ isLoading: loading }),
 
       setShowAuthModal: (show) => set({ showAuthModal: show }),
@@ -68,22 +91,34 @@ export const useAuthStore = create<AuthState>()(
 
       addKarma: async (amount, reason) => {
         const state = get()
-        if (!state.user?.email) return
+        if (!state.user) return
 
-        if (state.user?.isGuest) {
-          // Guests don't get karma sync, but we show a message
-          const newEvent = { 
-            id: `k-guest-${Date.now()}`, 
-            delta: 0, 
-            reason: `${reason} (Guest mode - no karma awarded)`, 
-            timestamp: Date.now() 
-          }
-          set((state) => ({
-            lastKarmaUpdate: newEvent
-          }))
-          return
+        // 1. Create the event
+        const newEvent: KarmaEvent = { 
+          id: `k-${Date.now()}`, 
+          delta: amount, 
+          reason, 
+          timestamp: Date.now() 
         }
 
+        // 2. Update state locally immediately (Optimistic UI)
+        set((state) => {
+          if (!state.user) return state;
+          const newKarma = state.user.karma + amount;
+          return {
+            user: { 
+              ...state.user, 
+              karma: newKarma,
+              trustTier: getTierForKarma(newKarma)
+            },
+            karmaEvents: [newEvent, ...state.karmaEvents].slice(0, 50),
+            lastKarmaUpdate: { delta: amount, reason, timestamp: Date.now() }
+          };
+        });
+
+        if (state.user.isGuest) return;
+
+        // 3. Sync with backend in background
         try {
            const res = await fetch('/api/karma', {
               method: 'POST',
@@ -93,21 +128,12 @@ export const useAuthStore = create<AuthState>()(
            const data = await res.json()
            
            if (data.success) {
-              const newEvent = { 
-                id: `k-${Date.now()}`, 
-                delta: amount, 
-                reason, 
-                timestamp: Date.now() 
-              }
-
               set((state) => ({
-                user: state.user ? { ...state.user, karma: data.newKarma, trustTier: data.tier } : null,
-                karmaEvents: [newEvent, ...state.karmaEvents].slice(0, 50),
-                lastKarmaUpdate: newEvent
+                user: state.user ? { ...state.user, karma: data.newKarma, trustTier: data.tier } : null
               }))
            }
         } catch (e) {
-           console.error("Failed to sync karma to DB", e)
+           console.error("Failed to sync karma to DB, kept local state", e)
         }
       },
     }),

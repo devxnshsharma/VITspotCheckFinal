@@ -476,13 +476,13 @@ export default function BookingPage() {
                 >
                   Book Another
                 </button>
-                <a
-                  to="/my-bookings"
+                <button
+                  onClick={() => navigate("/my-bookings")}
                   data-cursor="link"
                   className="px-6 py-3 rounded-full bg-accent text-white font-semibold hover:scale-105 transition-transform"
                 >
                   View My Bookings
-                </a>
+                </button>
               </div>
             </motion.div>
           )}

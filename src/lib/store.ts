@@ -1,6 +1,7 @@
 "use client"
 
 import { create } from "zustand"
+import { persist } from "zustand/middleware"
 
 // Types
 export type RoomStatus = "empty" | "occupied" | "unverified" | "conflict"
@@ -87,44 +88,49 @@ interface RoomState {
   getRoomsByFloor: (buildingId: string, floor: number) => Room[]
 }
 
-export const useRoomStore = create<RoomState>((set, get) => ({
-  rooms: {},
-  buildings: [],
-  selectedBuilding: null,
-  selectedFloor: null,
+export const useRoomStore = create<RoomState>()(
+  persist(
+    (set, get) => ({
+      rooms: {},
+      buildings: [],
+      selectedBuilding: null,
+      selectedFloor: null,
 
-  setRooms: (rooms) =>
-    set({
-      rooms: rooms.reduce((acc, room) => ({ ...acc, [room.id]: room }), {}),
-    }),
+      setRooms: (rooms: Room[]) =>
+        set({
+          rooms: rooms.reduce((acc, room) => ({ ...acc, [room.id]: room }), {}),
+        }),
 
-  setBuildings: (buildings) => set({ buildings }),
+      setBuildings: (buildings: Building[]) => set({ buildings }),
 
-  updateRoomStatus: (roomId, status) =>
-    set((state) => ({
-      rooms: {
-        ...state.rooms,
-        [roomId]: { ...state.rooms[roomId], status },
+      updateRoomStatus: (roomId: string, status: RoomStatus) =>
+        set((state) => ({
+          rooms: {
+            ...state.rooms,
+            [roomId]: { ...state.rooms[roomId], status },
+          },
+        })),
+
+      selectBuilding: (buildingId: string | null) =>
+        set({ selectedBuilding: buildingId, selectedFloor: null }),
+
+      selectFloor: (floor: number | null) => set({ selectedFloor: floor }),
+
+      getRoomsByBuilding: (buildingId: string) => {
+        const { rooms } = get()
+        return Object.values(rooms).filter((room) => room.block === buildingId)
       },
-    })),
 
-  selectBuilding: (buildingId) =>
-    set({ selectedBuilding: buildingId, selectedFloor: null }),
-
-  selectFloor: (floor) => set({ selectedFloor: floor }),
-
-  getRoomsByBuilding: (buildingId) => {
-    const { rooms } = get()
-    return Object.values(rooms).filter((room) => room.block === buildingId)
-  },
-
-  getRoomsByFloor: (buildingId, floor) => {
-    const { rooms } = get()
-    return Object.values(rooms).filter(
-      (room) => room.block === buildingId && room.floor === floor
-    )
-  },
-}))
+      getRoomsByFloor: (buildingId: string, floor: number) => {
+        const { rooms } = get()
+        return Object.values(rooms).filter(
+          (room) => room.block === buildingId && room.floor === floor
+        )
+      },
+    }),
+    { name: "vitspotcheck-rooms" }
+  )
+)
 
 // User Store
 interface UserState {
@@ -186,16 +192,21 @@ interface FeedState {
   setEvents: (events: FeedEvent[]) => void
 }
 
-export const useFeedStore = create<FeedState>((set) => ({
-  events: [],
+export const useFeedStore = create<FeedState>()(
+  persist(
+    (set) => ({
+      events: [],
 
-  addEvent: (event) =>
-    set((state) => ({
-      events: [event, ...state.events].slice(0, 50), // Keep last 50 events
-    })),
+      addEvent: (event: FeedEvent) =>
+        set((state) => ({
+          events: [event, ...state.events].slice(0, 50),
+        })),
 
-  setEvents: (events) => set({ events }),
-}))
+      setEvents: (events: FeedEvent[]) => set({ events }),
+    }),
+    { name: "vitspotcheck-feed" }
+  )
+)
 
 // Booking Store
 interface BookingState {
@@ -214,38 +225,43 @@ interface BookingState {
   resetBookingFlow: () => void
 }
 
-export const useBookingStore = create<BookingState>((set) => ({
-  bookings: [],
-  currentBookingStep: 1,
-  selectedRoom: null,
-  selectedDate: null,
-  selectedTimeSlot: null,
-
-  setBookings: (bookings) => set({ bookings }),
-
-  addBooking: (booking) =>
-    set((state) => ({ bookings: [...state.bookings, booking] })),
-
-  cancelBooking: (bookingId) =>
-    set((state) => ({
-      bookings: state.bookings.map((b) =>
-        b.id === bookingId ? { ...b, status: "cancelled" as const } : b
-      ),
-    })),
-
-  setBookingStep: (step) => set({ currentBookingStep: step }),
-
-  setSelectedRoom: (roomId) => set({ selectedRoom: roomId }),
-
-  setSelectedDate: (date) => set({ selectedDate: date }),
-
-  setSelectedTimeSlot: (slot) => set({ selectedTimeSlot: slot }),
-
-  resetBookingFlow: () =>
-    set({
+export const useBookingStore = create<BookingState>()(
+  persist(
+    (set) => ({
+      bookings: [],
       currentBookingStep: 1,
       selectedRoom: null,
       selectedDate: null,
       selectedTimeSlot: null,
+
+      setBookings: (bookings: Booking[]) => set({ bookings }),
+
+      addBooking: (booking: Booking) =>
+        set((state) => ({ bookings: [...state.bookings, booking] })),
+
+      cancelBooking: (bookingId: string) =>
+        set((state) => ({
+          bookings: state.bookings.map((b) =>
+            b.id === bookingId ? { ...b, status: "cancelled" as const } : b
+          ),
+        })),
+
+      setBookingStep: (step: number) => set({ currentBookingStep: step }),
+
+      setSelectedRoom: (roomId: string | null) => set({ selectedRoom: roomId }),
+
+      setSelectedDate: (date: string | null) => set({ selectedDate: date }),
+
+      setSelectedTimeSlot: (slot: { start: string; end: string } | null) => set({ selectedTimeSlot: slot }),
+
+      resetBookingFlow: () =>
+        set({
+          currentBookingStep: 1,
+          selectedRoom: null,
+          selectedDate: null,
+          selectedTimeSlot: null,
+        }),
     }),
-}))
+    { name: "vitspotcheck-bookings" }
+  )
+)

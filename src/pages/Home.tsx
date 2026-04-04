@@ -7,6 +7,7 @@ import { IntelligenceFeed } from "@/components/home/intelligence-feed"
 import { FloatingBookButton } from "@/components/home/floating-book-button"
 import { SpeedtestSection } from "@/components/sections/speedtest-section"
 import { BookingSection } from "@/components/sections/booking-section"
+import { FFCSSection } from "@/components/sections/ffcs-section"
 import { LayoutBuilderSection } from "@/components/sections/layout-builder-section"
 import { KarmaProfileSection } from "@/components/sections/karma-profile-section"
 import { AdminDashboardSection } from "@/components/sections/admin-dashboard-section"
@@ -37,6 +38,7 @@ export default function HomePage() {
       {/* Newly Migrated Functional Sections */}
       <SpeedtestSection />
       <BookingSection />
+      <FFCSSection />
       <LayoutBuilderSection />
       <KarmaProfileSection />
       <AdminDashboardSection />

@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Menu, X, Sparkles, User, LogOut, Shield } from "lucide-react"
-import { signIn } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import { useUIStore } from "@/lib/store"
 import { useAuthStore } from "@/lib/auth-store"
@@ -12,7 +11,7 @@ const NAV_SECTIONS = [
   { id: "hero", label: "Home" },
   { id: "blocks", label: "Rooms" },
   { id: "speedtest", label: "Speedtest" },
-  { id: "booking", label: "Booking" },
+  { id: "ffcs", label: "FFCS" },
   { id: "layout-builder", label: "Layout" },
   { id: "karma", label: "Karma" },
   { id: "admin", label: "Admin" },

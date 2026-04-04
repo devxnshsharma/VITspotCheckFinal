@@ -222,7 +222,7 @@ export function CampusMap() {
             {floorRooms.map((room, idx) => (
               <motion.div
                 key={room.id}
-                onClick={() => router.push(`/room/${room.id}`)}
+                onClick={() => router(`/room/${room.id}`)}
                 className="p-5 rounded-2xl bg-white/[0.03] border border-white/[0.06] cursor-pointer backdrop-blur-sm hover:bg-white/[0.06] transition-all"
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}

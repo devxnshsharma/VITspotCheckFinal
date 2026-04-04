@@ -4,21 +4,24 @@ import { useAuthStore } from "@/lib/auth-store"
 import { motion } from "framer-motion"
 import { ShieldAlert, Verified, Star, Fingerprint, Award, TrendingUp, Zap, Shield } from "lucide-react"
 import { useEffect, useState } from "react"
+import { LEADERBOARD } from "@/lib/mock-data"
+import { useFeedStore, type FeedEvent } from "@/lib/store"
 
 const TRUST_TIERS: Record<string, { label: string; range: string; color: string; weight: number }> = {
   OBSERVER: { label: 'Observer', range: '0', color: '#94A3B8', weight: 1.0 },
-  SPOTTER: { label: 'Spotter', range: '250', color: '#34D399', weight: 1.2 },
-  NAVIGATOR: { label: 'Navigator', range: '1200', color: '#3B82F6', weight: 1.5 },
-  ARCHITECT: { label: 'Architect', range: '6000', color: '#A855F7', weight: 2.0 },
-  ORACLE: { label: 'Oracle', range: '15000', color: '#F59E0B', weight: 3.0 }
+  SPOTTER: { label: 'Spotter', range: '100', color: '#34D399', weight: 1.2 },
+  NAVIGATOR: { label: 'Navigator', range: '500', color: '#3B82F6', weight: 1.5 },
+  ARCHITECT: { label: 'Architect', range: '1500', color: '#A855F7', weight: 2.0 },
+  ORACLE: { label: 'Oracle', range: '3000', color: '#F59E0B', weight: 3.0 }
 }
 
 const TIER_ORDER = ['OBSERVER', 'SPOTTER', 'NAVIGATOR', 'ARCHITECT', 'ORACLE'] as const
 
 export function KarmaProfileSection() {
   const { user, isAuthenticated, karmaEvents } = useAuthStore()
+  const { events: feedEvents } = useFeedStore()
   const [leaderboardTab, setLeaderboardTab] = useState<'weekly' | 'alltime'>('alltime')
-  const [leaderboard, setLeaderboard] = useState<any[]>([])
+  const [leaderboard, setLeaderboard] = useState<any[]>(LEADERBOARD)
   const [hasMounted, setHasMounted] = useState(false)
 
   useEffect(() => {
@@ -93,7 +96,13 @@ export function KarmaProfileSection() {
                       <span className="text-white/40">Global Scope Rank</span>
                       <span className="text-white">#1</span>
                    </div>
-                </div>
+                   <button 
+                      onClick={() => (window as any).location.href = '/my-bookings'}
+                      className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase font-black tracking-widest text-white/40 hover:bg-white hover:text-black transition-all"
+                    >
+                      View Space Reservations
+                    </button>
+                 </div>
              </div>
           </div>
 
@@ -154,20 +163,20 @@ export function KarmaProfileSection() {
                        <Star size={16} className="text-amber-400" />
                        <p className="text-[10px] text-white/40 uppercase tracking-[0.4em] font-bold">Event Registry</p>
                     </div>
-                    <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
-                       {karmaEvents.length === 0 && <p className="text-white/30 text-xs italic">No activity recorded yet.</p>}
-                       {karmaEvents.map(event => (
-                         <div key={event.id} className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors flex justify-between items-center group">
-                            <div>
-                               <p className="text-xs font-bold text-white mb-2">{event.reason}</p>
-                               <p className="text-[9px] text-white/30 uppercase tracking-widest">{new Date(event.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</p>
-                            </div>
-                            <span className={`text-xl font-bold font-mono transition-transform group-hover:scale-110 ${event.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                               {event.delta >= 0 ? '+' : ''}{event.delta}
-                            </span>
-                         </div>
-                       ))}
-                    </div>
+                     <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                        {feedEvents.length === 0 && <p className="text-white/30 text-xs italic">No activity recorded yet.</p>}
+                        {feedEvents.slice(0, 10).map((event: FeedEvent) => (
+                          <div key={event.id} className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors flex justify-between items-center group">
+                             <div>
+                                <p className="text-xs font-bold text-white mb-2">{event.action} {event.roomName}</p>
+                                <p className="text-[9px] text-white/30 uppercase tracking-widest">@{event.userName.split(' ')[0]} // {new Date(event.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</p>
+                             </div>
+                             <span className={`text-xl font-bold font-mono transition-transform group-hover:scale-110 ${event.karma && event.karma >= 0 ? 'text-emerald-400' : 'text-white/20'}`}>
+                                {event.karma && event.karma >= 0 ? `+${event.karma}` : '--'}
+                             </span>
+                          </div>
+                        ))}
+                     </div>
                  </div>
 
                  {/* Leaderboard Summary */}

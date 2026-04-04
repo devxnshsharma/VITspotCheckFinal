@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Shield, Users, Activity, Layout as LayoutIcon, CalendarCheck, RefreshCcw, ShieldAlert, Zap, Cpu, CheckCircle, AlertTriangle, Database } from "lucide-react"
 import { useAuthStore } from "@/lib/auth-store"
+import { useRoomStore, useFeedStore, type FeedEvent, type Room } from "@/lib/store"
 
 type AdminStats = {
   totalBookings: number
@@ -17,11 +18,13 @@ const SHARDS = ['PRP', 'SJT', 'TT', 'AB1', 'AB2', 'SMV', 'MB']
 
 export function AdminDashboardSection() {
   const [stats, setStats] = useState<AdminStats | null>(null)
-  const { karmaEvents } = useAuthStore()
+  const { karmaEvents, addKarma } = useAuthStore()
+  const { events: feedEvents } = useFeedStore()
+  const { rooms: roomMap } = useRoomStore()
+  const rooms = Object.values(roomMap)
   const [isSyncing, setIsSyncing] = useState(false)
   const [systemStatus, setSystemStatus] = useState('NOMINAL')
   const [selectedTab, setSelectedTab] = useState<'overview' | 'events' | 'reports'>('events')
-  const [shardPercents, setShardPercents] = useState<number[]>([])
   const [hasMounted, setHasMounted] = useState(false)
 
   useEffect(() => {
@@ -30,18 +33,24 @@ export function AdminDashboardSection() {
       .then(res => res.json())
       .then(data => setStats(data.stats))
       .catch(console.error)
-
-    // Fix hydration mismatch by generating random values on client only
-    setShardPercents(SHARDS.map(() => 30 + Math.random() * 60))
   }, [])
 
   const handleSystemReboot = () => {
     setIsSyncing(true)
     setSystemStatus('REBOOTING')
+    addKarma(100, "System Maintenance: Integrity Reboot Protocol")
     setTimeout(() => {
       setIsSyncing(false)
       setSystemStatus('NOMINAL')
     }, 3000)
+  }
+
+  const handleForceSync = () => {
+    setIsSyncing(true)
+    addKarma(50, "Node Synchronization: Cross-Shard Protocol Sync")
+    setTimeout(() => {
+      setIsSyncing(false)
+    }, 2000)
   }
 
   const statCards = [
@@ -94,7 +103,11 @@ export function AdminDashboardSection() {
                       {!isSyncing && <RefreshCcw size={16} className="group-hover:rotate-180 transition-transform duration-700" />}
                    </h4>
                 </button>
-                <button className="w-full p-8 rounded-[32px] bg-obsidian/40 border border-white/10 hover:bg-white/5 backdrop-blur-md transition-all text-left shadow-lg">
+                <button 
+                  onClick={handleForceSync}
+                  disabled={isSyncing}
+                  className="w-full p-8 rounded-[32px] bg-obsidian/40 border border-white/10 hover:bg-white/5 backdrop-blur-md transition-all text-left shadow-lg"
+                >
                    <p className="text-[9px] uppercase tracking-widest font-black text-indigo-400 mb-3">NODE SYNC</p>
                    <h4 className="text-xl font-bold text-white uppercase italic tracking-tighter">Force Shard Sync</h4>
                 </button>
@@ -160,23 +173,50 @@ export function AdminDashboardSection() {
                    </div>
                 </div>
 
-                <div className="space-y-4 overflow-y-auto pr-4 custom-scrollbar flex-1">
-                   {karmaEvents.length === 0 && <p className="text-white/30 text-xs italic font-mono">No recent flux registered.</p>}
-                   {karmaEvents.slice().map((event, idx) => (
-                     <motion.div 
-                       key={event.id}
-                       initial={{ opacity: 0, x: -10 }}
-                       whileInView={{ opacity: 1, x: 0 }}
-                       transition={{ delay: idx * 0.03 }}
-                       className="p-6 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-8 hover:bg-white/10 transition-colors"
-                     >
-                       <span className="font-mono text-[10px] text-white/40 uppercase tracking-widest shrink-0">{new Date(event.timestamp).toLocaleTimeString([], { hour12: false })}</span>
-                       <div className="w-1.5 h-1.5 rounded-full shrink-0 shadow-[0_0_10px_currentColor]" style={{ backgroundColor: event.delta >= 0 ? '#34D399' : '#FB7185', color: event.delta >= 0 ? '#34D399' : '#FB7185' }} />
-                       <p className="text-xs font-bold text-white/70 tracking-wider flex-1 uppercase truncate">{event.reason}</p>
-                       <span className={`font-mono text-xs font-bold ${event.delta > 0 ? "text-emerald-400" : "text-rose-400"}`}>{event.delta > 0 ? `+${event.delta}` : event.delta}</span>
-                     </motion.div>
-                   ))}
-                </div>
+                 <div className="space-y-4 overflow-y-auto pr-4 custom-scrollbar h-[400px] max-h-[400px]">
+                   {selectedTab === 'events' ? (
+                     <>
+                       {feedEvents.length === 0 && <p className="text-white/30 text-xs italic font-mono">No recent activity registered.</p>}
+                       {feedEvents.slice(0, 15).map((event: FeedEvent, idx: number) => (
+                         <motion.div 
+                           key={event.id}
+                           initial={{ opacity: 0, x: -10 }}
+                           whileInView={{ opacity: 1, x: 0 }}
+                           transition={{ delay: idx * 0.03 }}
+                           className="p-6 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-8 hover:bg-white/10 transition-colors"
+                         >
+                           <span className="font-mono text-[10px] text-white/40 uppercase tracking-widest shrink-0">{new Date(event.timestamp).toLocaleTimeString([], { hour12: false })}</span>
+                           <div className="w-1.5 h-1.5 rounded-full shrink-0 shadow-[0_0_10px_currentColor]" style={{ backgroundColor: event.type === 'verification' ? '#34D399' : event.type === 'speedtest' ? '#22D3EE' : '#FBBF24', color: '#FFF' }} />
+                           <p className="text-xs font-bold text-white/70 tracking-wider flex-1 uppercase truncate">@{event.userName.split(' ')[0]} {event.action} {event.roomName}</p>
+                           {event.karma && <span className="font-mono text-xs font-bold text-emerald-400">+{event.karma}</span>}
+                         </motion.div>
+                       ))}
+                     </>
+                   ) : selectedTab === 'reports' ? (
+                      <div className="flex flex-col items-center justify-center h-full text-center">
+                        <ShieldAlert size={48} className="text-white/10 mb-4" />
+                        <p className="text-white/20 uppercase tracking-[0.4em] font-mono text-[10px]">No high-priority conflicts in current shard</p>
+                      </div>
+                   ) : (
+                      <div className="space-y-4">
+                        {karmaEvents.length === 0 && <p className="text-white/30 text-xs italic font-mono">No recent flux registered.</p>}
+                        {karmaEvents.map((event, idx) => (
+                          <motion.div 
+                            key={event.id}
+                            initial={{ opacity: 0, x: -10 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.03 }}
+                            className="p-6 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-8 hover:bg-white/10 transition-colors"
+                          >
+                            <span className="font-mono text-[10px] text-white/40 uppercase tracking-widest shrink-0">{new Date(event.timestamp).toLocaleTimeString([], { hour12: false })}</span>
+                            <div className="w-1.5 h-1.5 rounded-full shrink-0 shadow-[0_0_10px_currentColor]" style={{ backgroundColor: event.delta >= 0 ? '#34D399' : '#FB7185', color: event.delta >= 0 ? '#34D399' : '#FB7185' }} />
+                            <p className="text-xs font-bold text-white/70 tracking-wider flex-1 uppercase truncate">{event.reason}</p>
+                            <span className={`font-mono text-xs font-bold ${event.delta > 0 ? "text-emerald-400" : "text-rose-400"}`}>{event.delta > 0 ? `+${event.delta}` : event.delta}</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                   )}
+                 </div>
              </div>
           </div>
 
@@ -185,14 +225,17 @@ export function AdminDashboardSection() {
              <p className="text-[10px] uppercase font-bold tracking-[0.4em] text-white/40 mb-12 flex items-center gap-3">
                 <RefreshCcw size={14} className="text-indigo-500" /> Sector Telemetry
              </p>
-             <div className="space-y-8 bg-obsidian/40 p-8 rounded-[40px] border border-white/5 backdrop-blur-xl">
+              <div className="space-y-8 bg-obsidian/40 p-8 rounded-[40px] border border-white/5 backdrop-blur-xl">
                 {SHARDS.map((block, i) => {
-                  const pct = shardPercents[i] || 50
+                  const blockRooms = rooms.filter((r: Room) => r.block === block)
+                  const empty = blockRooms.filter((r: Room) => r.status === 'empty').length
+                  const total = blockRooms.length
+                  const pct = total > 0 ? (empty / total) * 100 : 0
                   return (
                     <div key={block} className="space-y-4 px-2">
                        <div className="flex justify-between items-end">
                           <p className="text-xl font-bold text-white tracking-tighter italic">{block}</p>
-                          <p className="text-[10px] uppercase font-black tracking-widest text-white/40">{hasMounted ? Math.floor(pct) : 50}% Empty</p>
+                          <p className="text-[10px] uppercase font-black tracking-widest text-white/40">{total > 0 ? Math.floor(pct) : 0}% Empty</p>
                        </div>
                        <div className="h-1 bg-white/10 w-full relative rounded-full overflow-hidden">
                           <motion.div 
@@ -205,7 +248,7 @@ export function AdminDashboardSection() {
                     </div>
                   );
                 })}
-             </div>
+              </div>
           </div>
 
         </div>

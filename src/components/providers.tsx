@@ -1,6 +1,6 @@
 import { useState, useEffect, ReactNode } from "react"
 import { WebGLBackground } from "@/components/global/webgl-background"
-import { CustomCursor } from "@/components/global/custom-cursor"
+import { AntigravityCursor } from "@/components/global/antigravity-cursor"
 import { Navigation } from "@/components/global/navigation"
 import { Preloader } from "@/components/global/preloader"
 import { ToastNotification } from "@/components/global/toast-notification"
@@ -52,23 +52,20 @@ export function Providers({ children }: ProvidersProps) {
       {/* WebGL Background (persistent) */}
       <WebGLBackground dominantColor={dominantColor} />
 
-      {/* Custom Cursor (persistent) */}
-      <CustomCursor />
+      {/* Custom Antigravity Cursor (persistent) */}
+      <AntigravityCursor />
 
       {/* Navigation (persistent) */}
-      {isPreloaderComplete && <Navigation />}
+      <Navigation />
 
       {/* Toast Notifications */}
       <ToastNotification />
 
       {/* Live Update Banner */}
-      {isPreloaderComplete && <LiveUpdateBanner />}
+      <LiveUpdateBanner />
 
       {/* Page Content */}
-      <main
-        className="relative z-10"
-        style={{ opacity: isPreloaderComplete ? 1 : 0 }}
-      >
+      <main className="relative z-10 min-h-screen">
         {children}
       </main>
     </>

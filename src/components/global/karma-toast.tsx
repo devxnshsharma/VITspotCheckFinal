@@ -1,24 +1,37 @@
 "use client"
 
-import { motion, AnimatePresence } from 'framer-motion'
-import { useState, useEffect } from 'react'
-import { useAuthStore, KarmaEvent } from '@/lib/auth-store'
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { useAuthStore } from '@/lib/auth-store';
+
+interface Toast {
+  id: number;
+  delta: number;
+  reason: string;
+}
 
 export function KarmaToast() {
-  const lastUpdate = useAuthStore(s => s.lastKarmaUpdate)
-  const [activeToasts, setActiveToasts] = useState<KarmaEvent[]>([])
+  const lastUpdate = useAuthStore(s => s.lastKarmaUpdate);
+  const [activeToasts, setActiveToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
-    if (lastUpdate && lastUpdate.id) {
-      setActiveToasts(prev => [...prev, lastUpdate])
+    if (lastUpdate) {
+      const newToast = {
+        id: lastUpdate.timestamp,
+        delta: lastUpdate.delta,
+        reason: lastUpdate.reason
+      };
       
+      setActiveToasts(prev => [...prev, newToast]);
+      
+      // Auto-remove after 4 seconds
       const timer = setTimeout(() => {
-        setActiveToasts(prev => prev.filter(t => t.id !== lastUpdate.id))
-      }, 4000)
+        setActiveToasts(prev => prev.filter(t => t.id !== newToast.id));
+      }, 4000);
       
-      return () => clearTimeout(timer)
+      return () => clearTimeout(timer);
     }
-  }, [lastUpdate])
+  }, [lastUpdate]);
 
   return (
     <div className="fixed bottom-24 right-8 z-[100] pointer-events-none flex flex-col gap-3 items-end">
@@ -31,45 +44,47 @@ export function KarmaToast() {
             exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
             className="pointer-events-auto shadow-2xl overflow-hidden relative"
             style={{
-              background: 'rgba(6, 6, 12, 0.9)',
+              background: 'rgba(6, 6, 12, 0.95)',
               backdropFilter: 'blur(20px)',
-              border: `1px solid ${toast.delta >= 0 ? 'rgba(52,211,153,0.3)' : 'rgba(251,113,133,0.3)'}`,
-              borderRadius: '16px',
-              padding: '12px 20px',
-              minWidth: '240px',
-              maxWidth: '320px'
+              border: `1px solid ${toast.delta >= 0 ? 'rgba(16,185,129,0.3)' : 'rgba(251,113,133,0.3)'}`,
+              borderRadius: '24px',
+              padding: '16px 24px',
+              minWidth: '280px',
+              maxWidth: '360px'
             }}
           >
+            {/* Animated background glow */}
             <div 
-              className="absolute inset-0 opacity-10 pointer-events-none"
+              className="absolute inset-0 opacity-10"
               style={{
-                background: `radial-gradient(circle at center, ${toast.delta >= 0 ? '#34D399' : '#FB7185'}, transparent 70%)`
+                background: `radial-gradient(circle at center, ${toast.delta >= 0 ? '#10B981' : '#FB7185'}, transparent 70%)`
               }}
             />
             
-            <div className="relative z-10 flex items-center justify-between gap-4">
+            <div className="relative z-10 flex items-center justify-between gap-6">
               <div className="flex-1 min-w-0">
-                <span className="block font-mono text-[10px] uppercase tracking-widest mb-1 text-white/50">
-                  Karma Received
+                <span className="block font-mono text-[9px] uppercase tracking-[0.3em] mb-2 font-black" style={{ color: '#6B7280' }}>
+                  Protocol Yield
                 </span>
-                <span className="block text-sm text-white truncate font-medium">
+                <span className="block text-xs text-white/80 truncate font-black uppercase italic tracking-widest">
                   {toast.reason}
                 </span>
               </div>
               <motion.div 
-                className="font-mono text-xl font-bold shrink-0"
+                className="font-mono text-2xl font-black shrink-0 italic"
                 style={{ color: toast.delta >= 0 ? '#FBBF24' : '#FB7185' }}
                 initial={{ scale: 0.5 }}
                 animate={{ scale: [1, 1.3, 1] }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
+                transition={{ type: 'spring', stiffness: 400, damping: 10 }}
               >
                 ✦ {toast.delta >= 0 ? '+' : ''}{toast.delta}
               </motion.div>
             </div>
             
+            {/* Progress line shrink */}
             <motion.div 
               className="absolute bottom-0 left-0 h-0.5"
-              style={{ background: toast.delta >= 0 ? '#34D399' : '#FB7185' }}
+              style={{ background: toast.delta >= 0 ? '#10B981' : '#FB7185' }}
               initial={{ width: '100%' }}
               animate={{ width: '0%' }}
               transition={{ duration: 4, ease: 'linear' }}
@@ -78,5 +93,5 @@ export function KarmaToast() {
         ))}
       </AnimatePresence>
     </div>
-  )
+  );
 }
