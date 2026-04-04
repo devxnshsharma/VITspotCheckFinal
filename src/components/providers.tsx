@@ -19,14 +19,17 @@ export function Providers({ children }: ProvidersProps) {
   const { isPreloaderComplete, setPreloaderComplete, dominantColor } = useUIStore()
   const { setBuildings, setRooms } = useRoomStore()
   const { setEvents } = useFeedStore()
-  const { isAuthenticated, setShowAuthModal } = useAuthStore()
+  const { isAuthenticated, isLoading: authLoading, setShowAuthModal } = useAuthStore()
 
-  // Initialize mock data
+  // Initialize mock data + Firebase auth listener
   useEffect(() => {
     setBuildings(BUILDINGS)
     setRooms(ROOMS)
     setEvents(FEED_EVENTS)
-    useAuthStore.persist.rehydrate()
+
+    // Start Firebase auth listener (replaces Zustand rehydrate)
+    const unsubscribe = useAuthStore.getState().initAuthListener()
+    return () => unsubscribe()
   }, [setBuildings, setRooms, setEvents])
 
   const handlePreloaderComplete = () => {
@@ -34,9 +37,24 @@ export function Providers({ children }: ProvidersProps) {
     setPreloaderComplete(true)
 
     // Show auth modal after preloader if not authenticated
+    // Wait a bit for Firebase auth to resolve first
     setTimeout(() => {
-      if (!isAuthenticated) {
+      const { isAuthenticated: authed, isLoading: loading } = useAuthStore.getState()
+      if (!authed && !loading) {
         setShowAuthModal(true)
+      } else if (loading) {
+        // Auth still loading — wait a bit more then check again
+        const checkInterval = setInterval(() => {
+          const state = useAuthStore.getState()
+          if (!state.isLoading) {
+            clearInterval(checkInterval)
+            if (!state.isAuthenticated) {
+              setShowAuthModal(true)
+            }
+          }
+        }, 200)
+        // Safety: clear after 5s no matter what
+        setTimeout(() => clearInterval(checkInterval), 5000)
       }
     }, 500)
   }
@@ -71,4 +89,3 @@ export function Providers({ children }: ProvidersProps) {
     </>
   )
 }
-

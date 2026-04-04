@@ -1,74 +1,54 @@
-"use client"
-
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Mail, AlertCircle, Check, Sparkles } from "lucide-react"
-import { useAuthStore, isVITEmail, extractRegNumber, AuthUser } from "@/lib/auth-store"
-import { signIn } from "next-auth/react"
+import { useAuthStore } from "@/lib/auth-store"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
 export function GoogleAuthModal() {
-  const { showAuthModal, setShowAuthModal, setUser, setIsLoading, isLoading } =
+  const { showAuthModal, setShowAuthModal, setIsLoading, isLoading, loginWithGoogle, loginAsGuest } =
     useAuthStore()
-  const [email, setEmail] = useState("")
   const [error, setError] = useState("")
   const [step, setStep] = useState<"email" | "verifying" | "success">("email")
 
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
     setIsLoading(true)
+    setError("")
     setStep("verifying")
-    
-    // Create Simulated Student profile (Instead of calling real NextAuth since keys are missing)
-    const mockStudent: AuthUser = {
-      id: `s-${Date.now()}`,
-      email: "architect@vitstudent.ac.in",
-      name: "Lead Architect",
-      isVITStudent: true,
-      registrationNumber: "22BCE1234",
-      karma: 1500,
-      trustTier: "elite",
-      verificationsCount: 42,
-      joinedAt: new Date().toISOString(),
-      isGuest: false
-    }
 
-    // Simulate verification delay
-    setTimeout(() => {
+    const result = await loginWithGoogle()
+
+    if (result.success) {
       setStep("success")
       setTimeout(() => {
-        setUser(mockStudent)
-        setIsLoading(false)
         setShowAuthModal(false)
+        setStep("email") // Reset for next time
         toast.success("Identity verified via VIT Relay. Full access unlocked.")
-      }, 1000)
-    }, 1500)
+      }, 1200)
+    } else {
+      setStep("email")
+      setIsLoading(false)
+      if (result.error) {
+        setError(result.error)
+        toast.error("Authentication failed")
+      }
+      // If error is empty string (popup closed), do nothing
+    }
   }
 
   const handleDemoLogin = () => {
     setIsLoading(true)
     setError("")
-    
-    // Create Guest User
-    const guestUser: AuthUser = {
-      id: "guest-id",
-      email: "guest@vitspotcheck.demo",
-      name: "Guest Architect",
-      isVITStudent: false,
-      karma: 0,
-      trustTier: "guest",
-      verificationsCount: 0,
-      joinedAt: new Date().toISOString(),
-      isGuest: true
-    }
 
-    // Simulate short delay
+    // Use the new guest login with random name
+    loginAsGuest()
+
     setTimeout(() => {
-      setUser(guestUser)
       setIsLoading(false)
       setShowAuthModal(false)
-      toast.success("Guest access granted. Views enabled, Karma disabled.")
-    }, 800)
+      setStep("email") // Reset for next time
+      toast.success("Guest access granted. Full site access enabled.")
+    }, 600)
   }
 
   if (!showAuthModal) return null
@@ -134,35 +114,37 @@ export function GoogleAuthModal() {
                   </motion.div>
                 )}
 
-                {/* Skip & Enter - THE PRIMARY BYPASS */}
+                {/* Google Sign In Button — PRIMARY */}
                 <button
-                  onClick={handleDemoLogin}
-                  className="w-full py-6 px-6 rounded-2xl bg-gradient-to-r from-[#00E5FF] to-[#00FFD1] text-black font-black uppercase tracking-[0.4em] flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_40px_rgba(0,229,255,0.4)] mb-6 group"
+                  onClick={handleGoogleSignIn}
+                  disabled={isLoading}
+                  className="w-full py-5 px-6 rounded-2xl bg-gradient-to-r from-[#00E5FF] to-[#00FFD1] text-black font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_40px_rgba(0,229,255,0.4)] mb-4 group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Sparkles className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                  Skip & Enter
+                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
+                    <path fill="#020204" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#020204" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#020204" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#020204" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                  </svg>
+                  Sign in with Google
                 </button>
 
-                {/* Google Sign In Button - SECONDARY */}
-                <div className="relative mb-4 opacity-50 hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={handleGoogleSignIn}
-                    disabled={isLoading}
-                    className="w-full py-4 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold flex items-center justify-center gap-3 hover:bg-white/10 transition-colors disabled:opacity-50"
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                      {/* ... path same as before ... */}
-                      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                    </svg>
-                    Sign in with Google
-                  </button>
-                  <span className="absolute -top-3 right-4 px-2 py-0.5 rounded-full bg-rose-500 text-[8px] font-black uppercase tracking-widest text-white shadow-lg">
-                    Auth.js Required
-                  </span>
+                {/* Divider */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-px flex-1 bg-white/10" />
+                  <span className="text-[10px] text-white/30 uppercase tracking-widest font-bold">or</span>
+                  <div className="h-px flex-1 bg-white/10" />
                 </div>
+
+                {/* Skip & Enter — SECONDARY */}
+                <button
+                  onClick={handleDemoLogin}
+                  disabled={isLoading}
+                  className="w-full py-4 px-6 rounded-xl bg-white/5 border border-white/10 text-white/70 font-semibold flex items-center justify-center gap-3 hover:bg-white/10 hover:text-white transition-all disabled:opacity-50"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Continue as Guest
+                </button>
 
                 {/* Info */}
                 <div className="mt-8 p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
@@ -171,7 +153,7 @@ export function GoogleAuthModal() {
                     <span className="text-sm font-medium">VIT Email Required</span>
                   </div>
                   <p className="text-xs text-white/50">
-                    Only students with @vitstudent.ac.in email can access the platform
+                    Only students with @vitstudent.ac.in, @vit.ac.in, @vitbhopal.ac.in, @vitap.ac.in, or @vitchennai.ac.in email can sign in with Google
                   </p>
                 </div>
               </motion.div>

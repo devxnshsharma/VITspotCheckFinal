@@ -117,22 +117,30 @@ export function Navigation() {
                 {/* User Avatar */}
                 <div className="relative group">
                   <button className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center text-black font-bold transition-all",
+                    "w-10 h-10 rounded-full flex items-center justify-center text-black font-bold transition-all overflow-hidden",
                     user.isGuest 
                       ? "bg-gradient-to-br from-gray-400 to-gray-600 border-2 border-white/20" 
                       : "bg-gradient-to-br from-[#00E5FF] to-[#00FFD1]"
                   )}>
-                    {user.name.charAt(0)}
+                    {user.avatar ? (
+                      <img src={user.avatar} alt={user.name} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                    ) : (
+                      user.name.charAt(0)
+                    )}
                   </button>
                   
                   {/* Dropdown */}
-                  <div className="absolute right-0 top-full mt-2 w-48 p-2 rounded-xl glass-panel border border-white/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                  <div className="absolute right-0 top-full mt-2 w-56 p-2 rounded-xl glass-panel border border-white/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                     <div className="px-3 py-2 border-b border-white/10 mb-2">
                       <p className="font-medium text-white text-sm flex items-center gap-2">
                         {user.name}
                         {user.isGuest && <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/10 text-white/50 uppercase font-black">Guest</span>}
+                        {user.isVITStudent && <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] uppercase font-black">VIT</span>}
                       </p>
                       <p className="text-xs text-white/50 truncate">{user.email}</p>
+                      {user.registrationNumber && (
+                        <p className="text-xs text-cyan-400/70 mt-0.5">{user.registrationNumber}</p>
+                      )}
                     </div>
                     <button
                       onClick={() => {
