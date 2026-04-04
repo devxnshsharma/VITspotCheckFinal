@@ -146,5 +146,5 @@ Any contributor to this repository must adhere strictly to the design system. VI
 -----
 
 
-"You dream it. We ship it. All in days, not quarters."
-© 2026 VITspotCheck. All rights reserved.
+## *"You dream it. We ship it. All in days, not quarters."*
+**© 2026 VITspotCheck. All rights reserved.**
