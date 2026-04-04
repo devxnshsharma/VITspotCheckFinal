@@ -91,8 +91,8 @@ export function GoogleAuthModal() {
                 className="text-center"
               >
                 {/* Logo */}
-                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">V</span>
+                <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+                  <img src="/icon.png" alt="VITspotCheck Icon" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(168,216,234,0.3)]" />
                 </div>
 
                 <h2 className="text-2xl font-bold text-white mb-2">

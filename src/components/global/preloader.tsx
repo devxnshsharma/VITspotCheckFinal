@@ -69,15 +69,14 @@ export function Preloader({ onComplete }: PreloaderProps) {
         isExiting && "opacity-0 scale-105"
       )}>
         {/* Wordmark */}
-        <h1 
+        <div 
           className={cn(
-            "text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-white tracking-tight mb-8 transition-all duration-400",
+            "flex justify-center mb-10 transition-all duration-400",
             isExiting && "opacity-0 scale-105"
           )}
-          style={{ letterSpacing: "0.02em" }}
         >
-          VITspotCheck
-        </h1>
+          <img src="/logo.png" alt="VITspotCheck" className="h-24 sm:h-32 md:h-40 lg:h-52 object-contain drop-shadow-[0_0_20px_rgba(168,216,234,0.3)]" />
+        </div>
         
         {/* Counter */}
         <div 

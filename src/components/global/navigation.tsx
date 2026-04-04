@@ -72,9 +72,9 @@ export function Navigation() {
           <div className="flex-1 shrink-0">
             <button
               onClick={() => scrollToSection("hero")}
-              className="text-xl font-bold text-white tracking-tight hover:text-[#00E5FF] transition-colors"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity drop-shadow-[0_0_10px_rgba(168,216,234,0.2)]"
             >
-              VITspotCheck
+              <img src="/logo.png" alt="VITspotCheck" className="h-[56px] w-[180px] lg:h-[72px] lg:w-[240px] object-contain object-left scale-110 origin-left" />
             </button>
           </div>
 
