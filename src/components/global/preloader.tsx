@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useRef } from "react"
 import { cn } from "@/lib/utils"
 
 interface PreloaderProps {
@@ -12,8 +12,18 @@ export function Preloader({ onComplete }: PreloaderProps) {
   const [isExiting, setIsExiting] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
 
-  const animateProgress = useCallback(() => {
-    const startTime = Date.now()
+  const startTimeRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    let animationFrameId: number
+    let timeoutId1: NodeJS.Timeout
+    let timeoutId2: NodeJS.Timeout
+
+    // Preserve the original start time across strict-mode remounts
+    if (startTimeRef.current === null) {
+      startTimeRef.current = Date.now()
+    }
+    const startTime = startTimeRef.current
     const minDuration = 2500 // Minimum 2.5 seconds
     
     // Easing function for smooth organic progress (easeOutQuad)
@@ -29,30 +39,33 @@ export function Preloader({ onComplete }: PreloaderProps) {
       setProgress(smoothedProgress)
       
       if (elapsed < minDuration) {
-        requestAnimationFrame(update)
+        animationFrameId = requestAnimationFrame(update)
       } else {
         // Snap to 100%
         setProgress(100)
         
         // Hold at 100% briefly then exit
-        setTimeout(() => {
+        timeoutId1 = setTimeout(() => {
           setIsExiting(true)
         }, 400)
         
         // Complete after exit animation
-        setTimeout(() => {
+        timeoutId2 = setTimeout(() => {
           setIsComplete(true)
           onComplete()
         }, 1600)
       }
     }
     
-    requestAnimationFrame(update)
-  }, [onComplete])
+    animationFrameId = requestAnimationFrame(update)
 
-  useEffect(() => {
-    animateProgress()
-  }, [animateProgress])
+    // Cleanup handles strict mode double-invocations perfectly
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+      clearTimeout(timeoutId1)
+      clearTimeout(timeoutId2)
+    }
+  }, [onComplete])
 
   if (isComplete) return null
 
