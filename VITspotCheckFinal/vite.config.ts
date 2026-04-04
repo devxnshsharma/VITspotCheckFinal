@@ -1,10 +1,8 @@
-// next.config.js
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Remove or comment out this line:
-  // output: 'export', 
-  
-  // keep your other configs...
-};
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react' // or @vitejs/plugin-vue if using Vue
 
-module.exports = nextConfig;
+export default defineConfig({
+  plugins: [react()],
+  // Replace 'VITspotCheckFinal' with your exact GitHub repository name
+  base: '/VITspotCheckFinal/', 
+})
