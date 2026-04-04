@@ -26,6 +26,7 @@ export function Providers({ children }: ProvidersProps) {
     setBuildings(BUILDINGS)
     setRooms(ROOMS)
     setEvents(FEED_EVENTS)
+    useAuthStore.persist.rehydrate()
   }, [setBuildings, setRooms, setEvents])
 
   const handlePreloaderComplete = () => {

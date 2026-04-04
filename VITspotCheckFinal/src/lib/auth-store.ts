@@ -113,6 +113,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "vitspotcheck-auth-v2",
+      skipHydration: true,
     }
   )
 )
