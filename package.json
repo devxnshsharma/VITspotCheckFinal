@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "server": "tsx server/index.ts"
+    "server": "tsx server/index.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@cloudflare/speedtest": "^1.7.0",

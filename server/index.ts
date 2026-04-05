@@ -498,6 +498,10 @@ app.get('/api/admin/summary', async (_req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend Server API running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production' || process.env.RUN_LOCAL_SERVER === 'true') {
+  app.listen(PORT, () => {
+    console.log(`Backend Server API running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
