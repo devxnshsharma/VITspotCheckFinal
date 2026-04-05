@@ -2,7 +2,8 @@
 
 import { useAuthStore } from "@/lib/auth-store"
 import { motion } from "framer-motion"
-import { ShieldAlert, Verified, Star, Fingerprint, Award, TrendingUp, Zap, Shield } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { ShieldAlert, Verified, Star, Fingerprint, Award, TrendingUp, Zap, Shield, Calendar, Clock, MapPin } from "lucide-react"
 import { useEffect, useState } from "react"
 import { LEADERBOARD } from "@/lib/mock-data"
 import { useFeedStore, type FeedEvent } from "@/lib/store"
@@ -20,17 +21,52 @@ const TIER_ORDER = ['OBSERVER', 'SPOTTER', 'NAVIGATOR', 'ARCHITECT', 'ORACLE'] a
 export function KarmaProfileSection() {
   const { user, isAuthenticated, karmaEvents } = useAuthStore()
   const { events: feedEvents } = useFeedStore()
+  const navigate = useNavigate()
   const [leaderboardTab, setLeaderboardTab] = useState<'weekly' | 'alltime'>('alltime')
   const [leaderboard, setLeaderboard] = useState<any[]>(LEADERBOARD)
+  const [nextBooking, setNextBooking] = useState<any>(null)
   const [hasMounted, setHasMounted] = useState(false)
 
   useEffect(() => {
     setHasMounted(true)
-    fetch('/api/users')
-      .then(res => res.json())
-      .then(data => setLeaderboard(data))
-      .catch(console.error)
+
+    // Issue 6: Fetch real leaderboard from API
+    const fetchLeaderboard = () => {
+      fetch('/api/leaderboard')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) {
+            setLeaderboard(data)
+          }
+        })
+        .catch(console.error)
+    }
+
+    fetchLeaderboard()
+    // Poll every 60 seconds
+    const leaderboardInterval = setInterval(fetchLeaderboard, 60000)
+
+    return () => clearInterval(leaderboardInterval)
   }, [])
+
+  // Issue 5: Fetch next upcoming booking
+  useEffect(() => {
+    if (!user?.email) return
+
+    const fetchNext = async () => {
+      try {
+        const res = await fetch(`/api/bookings/next?email=${encodeURIComponent(user.email)}`)
+        if (res.ok) {
+          const data = await res.json()
+          setNextBooking(data)
+        }
+      } catch (e) {
+        console.error('Failed to fetch next booking:', e)
+      }
+    }
+
+    fetchNext()
+  }, [user?.email])
 
   if (!hasMounted || !isAuthenticated || !user) return null
 
@@ -96,12 +132,54 @@ export function KarmaProfileSection() {
                       <span className="text-white/40">Global Scope Rank</span>
                       <span className="text-white">#1</span>
                    </div>
+
+                   {/* Issue 5: View Space Reservations — proper navigation */}
                    <button 
-                      onClick={() => (window as any).location.href = '/my-bookings'}
+                      onClick={() => navigate('/my-bookings')}
                       className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase font-black tracking-widest text-white/40 hover:bg-white hover:text-black transition-all"
                     >
-                      View Space Reservations
+                      View Space Reservations →
                     </button>
+
+                    {/* Issue 5: Upcoming Booking Preview Card */}
+                    {nextBooking ? (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/20 text-left space-y-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Calendar size={12} className="text-emerald-400" />
+                          <span className="text-[9px] uppercase tracking-[0.3em] font-black text-emerald-400">Next Booking</span>
+                        </div>
+                        <p className="text-lg font-black text-white uppercase italic tracking-tight">
+                          {nextBooking.roomName}
+                        </p>
+                        <div className="flex items-center gap-4 text-[10px] text-white/50 font-mono">
+                          <span className="flex items-center gap-1">
+                            <Clock size={10} />
+                            {new Date(nextBooking.startTime).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
+                            {' · '}
+                            {new Date(nextBooking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {' – '}
+                            {new Date(nextBooking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold">{nextBooking.reason}</p>
+                      </motion.div>
+                    ) : (
+                      <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
+                        <p className="text-[10px] text-white/20 uppercase tracking-widest font-bold">
+                          No upcoming reservations.{' '}
+                          <button 
+                            onClick={() => navigate('/booking')} 
+                            className="text-amber-400 hover:text-amber-300 underline underline-offset-4 transition-colors"
+                          >
+                            Book a space →
+                          </button>
+                        </p>
+                      </div>
+                    )}
                  </div>
              </div>
           </div>
@@ -179,7 +257,7 @@ export function KarmaProfileSection() {
                      </div>
                  </div>
 
-                 {/* Leaderboard Summary */}
+                 {/* Issue 6: Leaderboard — real data with polling */}
                  <div className="p-8 rounded-[40px] bg-obsidian/60 border border-white/5 backdrop-blur-xl space-y-6 flex flex-col h-[400px]">
                     <div className="flex justify-between items-center">
                        <p className="text-[10px] text-white/40 uppercase tracking-[0.4em] font-bold">Network Index</p>

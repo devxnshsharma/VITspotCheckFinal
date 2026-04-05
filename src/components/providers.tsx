@@ -1,4 +1,4 @@
-import { useState, useEffect, ReactNode } from "react"
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react"
 import { WebGLBackground } from "@/components/global/webgl-background"
 import { AntigravityCursor } from "@/components/global/antigravity-cursor"
 import { Navigation } from "@/components/global/navigation"
@@ -27,10 +27,67 @@ export function Providers({ children }: ProvidersProps) {
     setRooms(ROOMS)
     setEvents(FEED_EVENTS)
 
-    // Start Firebase auth listener (replaces Zustand rehydrate)
+    // Start Firebase auth listener
     const unsubscribe = useAuthStore.getState().initAuthListener()
     return () => unsubscribe()
   }, [setBuildings, setRooms, setEvents])
+
+  // Issue 4: Restore user session preferences after auth resolves
+  useEffect(() => {
+    const authState = useAuthStore.getState()
+    if (!authState.isAuthenticated || !authState.user?.email || authState.user?.isGuest) return
+
+    const restoreSession = async () => {
+      try {
+        const res = await fetch(`/api/user/session?email=${encodeURIComponent(authState.user!.email)}`)
+        if (res.ok) {
+          const session = await res.json()
+          if (session && session.lastBlock) {
+            const roomStore = useRoomStore.getState()
+            roomStore.selectBuilding(session.lastBlock)
+            if (session.preferredFloor != null) {
+              roomStore.selectFloor(session.preferredFloor)
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Session restore failed:', e)
+      }
+    }
+
+    restoreSession()
+  }, [isAuthenticated])
+
+  // Issue 4: Debounced session saver — saves preferences 2s after changes
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { selectedBuilding, selectedFloor } = useRoomStore()
+
+  useEffect(() => {
+    const authState = useAuthStore.getState()
+    if (!authState.isAuthenticated || !authState.user?.email || authState.user?.isGuest) return
+    if (!selectedBuilding) return
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await fetch('/api/user/session', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: authState.user!.email,
+            lastBlock: selectedBuilding,
+            preferredFloor: selectedFloor,
+          }),
+        })
+      } catch (e) {
+        console.error('Session save failed:', e)
+      }
+    }, 2000)
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [selectedBuilding, selectedFloor, isAuthenticated])
 
   const handlePreloaderComplete = () => {
     setShowPreloader(false)

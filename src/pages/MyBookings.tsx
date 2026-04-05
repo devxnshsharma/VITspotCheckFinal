@@ -1,15 +1,105 @@
 "use client"
 
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, ArrowLeft, QrCode, X, MapPin, Activity, Database, Sparkles } from 'lucide-react'
+import { Calendar, ArrowLeft, QrCode, X, MapPin, Activity, Database, Sparkles, Clock, AlertCircle } from 'lucide-react'
 import { useBookingStore, useRoomStore } from '@/lib/store'
+import { useAuthStore } from '@/lib/auth-store'
 import { Footer } from '@/components/global/footer'
+import { toast } from 'sonner'
+
+interface BackendBooking {
+  id: string
+  roomName: string
+  startTime: string
+  endTime: string
+  reason: string
+  status: string
+  createdAt: string
+}
 
 export default function MyBookings() {
   const navigate = useNavigate()
-  const { bookings, cancelBooking } = useBookingStore()
+  const { bookings: localBookings, cancelBooking } = useBookingStore()
   const { rooms } = useRoomStore()
+  const { user, isAuthenticated } = useAuthStore()
+  const [dbBookings, setDbBookings] = useState<BackendBooking[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Issue 3: Fetch bookings from backend on mount
+  useEffect(() => {
+    if (!user?.email) {
+      setIsLoading(false)
+      return
+    }
+
+    const fetchBookings = async () => {
+      try {
+        const res = await fetch(`/api/bookings?email=${encodeURIComponent(user.email)}`)
+        if (res.ok) {
+          const data = await res.json()
+          setDbBookings(data)
+        }
+      } catch (e) {
+        console.error('Failed to fetch bookings from backend:', e)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchBookings()
+  }, [user?.email])
+
+  // Merge backend + local bookings (deduplicate by id)
+  const mergedBookings = (() => {
+    const seen = new Set<string>()
+    const result: Array<{
+      id: string
+      roomLabel: string
+      date: string
+      startTime: string
+      endTime: string
+      status: string
+      purpose: string
+      source: 'db' | 'local'
+    }> = []
+
+    // Backend bookings first (authoritative)
+    for (const b of dbBookings) {
+      seen.add(b.id)
+      const start = new Date(b.startTime)
+      const end = new Date(b.endTime)
+      result.push({
+        id: b.id,
+        roomLabel: b.roomName,
+        date: start.toISOString().split('T')[0],
+        startTime: start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        endTime: end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        status: b.status || 'confirmed',
+        purpose: b.reason || 'Study / Meeting',
+        source: 'db',
+      })
+    }
+
+    // Local bookings that aren't in DB
+    for (const b of localBookings) {
+      if (!seen.has(b.id)) {
+        result.push({
+          id: b.id,
+          roomLabel: rooms[b.roomId]?.name || b.roomId,
+          date: b.date,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          status: b.status,
+          purpose: b.purpose || 'Study / Meeting',
+          source: 'local',
+        })
+      }
+    }
+
+    return result
+  })()
 
   const statusColors: Record<string, string> = {
     confirmed: '#34D399',
@@ -18,14 +108,40 @@ export default function MyBookings() {
     pending: '#FBBF24',
   }
 
-  // Filter and enrich bookings with room labels
-  const enrichedBookings = bookings.map(b => ({
-    ...b,
-    roomLabel: rooms[b.roomId]?.name || b.roomId,
-  }))
+  // Separate into upcoming and past
+  const now = new Date()
+  const activeBookings = mergedBookings.filter(b => {
+    if (b.status === 'cancelled') return false
+    const bookingEnd = new Date(`${b.date}T${b.endTime}:00`)
+    return bookingEnd > now && (b.status === 'confirmed' || b.status === 'pending')
+  })
+  const pastBookings = mergedBookings.filter(b => {
+    if (b.status === 'cancelled') return true
+    const bookingEnd = new Date(`${b.date}T${b.endTime}:00`)
+    return bookingEnd <= now || b.status === 'completed'
+  })
 
-  const activeBookings = enrichedBookings.filter(b => b.status === 'confirmed' || b.status === 'pending')
-  const pastBookings = enrichedBookings.filter(b => b.status !== 'confirmed' && b.status !== 'pending')
+  // Issue 3: Cancel booking via backend
+  const handleCancel = async (bookingId: string, source: 'db' | 'local') => {
+    if (source === 'db') {
+      try {
+        const res = await fetch(`/api/bookings/${bookingId}/cancel`, { method: 'PATCH' })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Cancel failed' }))
+          toast.error(err.error || 'Cannot cancel this booking')
+          return
+        }
+        // Update local state
+        setDbBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b))
+        toast.success('Booking cancelled')
+      } catch {
+        toast.error('Failed to cancel booking')
+      }
+    } else {
+      cancelBooking(bookingId)
+      toast.success('Booking cancelled')
+    }
+  }
 
   return (
     <motion.div 
@@ -53,10 +169,10 @@ export default function MyBookings() {
             </h1>
             <div className="flex items-center gap-8">
                <p className="font-mono text-[10px] text-white/30 uppercase tracking-[0.2em] flex items-center gap-3 font-bold">
-                  <Activity size={12} className="text-emerald-500" /> {activeBookings.length} Active Sessions
+                 <Activity size={12} className="text-emerald-500" /> {activeBookings.length} Active Sessions
                </p>
                <p className="font-mono text-[10px] text-white/30 uppercase tracking-[0.2em] flex items-center gap-3 font-bold">
-                  <Database size={12} className="text-white/10" /> {pastBookings.length} Archived
+                 <Database size={12} className="text-white/10" /> {pastBookings.length} Archived
                </p>
             </div>
           </div>
@@ -70,33 +186,44 @@ export default function MyBookings() {
           </motion.button>
         </div>
 
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-white/30 uppercase tracking-widest text-xs font-mono animate-pulse">
+              Syncing reservations from mainframe...
+            </div>
+          </div>
+        )}
+
         {/* Global Statistics Matrix */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-1 mb-20 overflow-hidden rounded-[2.5rem] border border-white/5 bg-white/[0.02] backdrop-blur-3xl">
-           <div className="p-10 border-r border-white/5 relative group hover:bg-white/[0.01] transition-colors">
-              <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.4em] mb-4 block font-black">Temporal Status</span>
-              <span className="text-5xl font-black italic tracking-tighter text-emerald-400">{activeBookings.length}</span>
-              <div className="absolute top-10 right-10 opacity-10 group-hover:opacity-30 transition-opacity">
-                 <Activity size={32} />
-              </div>
-           </div>
-           <div className="p-10 border-r border-white/5 relative group hover:bg-white/[0.01] transition-colors">
-              <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.4em] mb-4 block font-black">Lifetime Syncs</span>
-              <span className="text-5xl font-black italic tracking-tighter text-white/80">{bookings.length}</span>
-              <div className="absolute top-10 right-10 opacity-10 group-hover:opacity-30 transition-opacity">
-                 <Database size={32} />
-              </div>
-           </div>
-           <div className="p-10 relative group hover:bg-white/[0.01] transition-colors">
-              <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.4em] mb-4 block font-black">Reputation Yield</span>
-              <span className="text-5xl font-black italic tracking-tighter text-amber-500">✦ {bookings.length * 10}</span>
-              <div className="absolute top-10 right-10 opacity-10 group-hover:opacity-30 transition-opacity">
-                 <Sparkles size={32} />
-              </div>
-           </div>
-        </div>
+        {!isLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-1 mb-20 overflow-hidden rounded-[2.5rem] border border-white/5 bg-white/[0.02] backdrop-blur-3xl">
+             <div className="p-10 border-r border-white/5 relative group hover:bg-white/[0.01] transition-colors">
+                <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.4em] mb-4 block font-black">Temporal Status</span>
+                <span className="text-5xl font-black italic tracking-tighter text-emerald-400">{activeBookings.length}</span>
+                <div className="absolute top-10 right-10 opacity-10 group-hover:opacity-30 transition-opacity">
+                   <Activity size={32} />
+                </div>
+             </div>
+             <div className="p-10 border-r border-white/5 relative group hover:bg-white/[0.01] transition-colors">
+                <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.4em] mb-4 block font-black">Lifetime Syncs</span>
+                <span className="text-5xl font-black italic tracking-tighter text-white/80">{mergedBookings.length}</span>
+                <div className="absolute top-10 right-10 opacity-10 group-hover:opacity-30 transition-opacity">
+                   <Database size={32} />
+                </div>
+             </div>
+             <div className="p-10 relative group hover:bg-white/[0.01] transition-colors">
+                <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.4em] mb-4 block font-black">Reputation Yield</span>
+                <span className="text-5xl font-black italic tracking-tighter text-amber-500">✦ {mergedBookings.filter(b => b.status !== 'cancelled').length * 10}</span>
+                <div className="absolute top-10 right-10 opacity-10 group-hover:opacity-30 transition-opacity">
+                   <Sparkles size={32} />
+                </div>
+             </div>
+          </div>
+        )}
 
         {/* Active Operations */}
-        {activeBookings.length > 0 && (
+        {!isLoading && activeBookings.length > 0 && (
           <div className="mb-24">
             <h2 className="text-[11px] font-mono text-white/40 uppercase tracking-[0.5em] mb-12 flex items-center gap-4 font-black">
                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_#34D399]" />
@@ -132,7 +259,7 @@ export default function MyBookings() {
                          </div>
                          <div>
                             <h3 className="text-4xl md:text-5xl font-black text-white uppercase italic tracking-tighter mb-1">{booking.roomLabel}</h3>
-                            <span className="font-mono text-[10px] text-white/30 uppercase tracking-[0.3em] font-bold">{booking.purpose || "Domain Lock Extension"}</span>
+                            <span className="font-mono text-[10px] text-white/30 uppercase tracking-[0.3em] font-bold">{booking.purpose}</span>
                          </div>
                       </div>
 
@@ -159,7 +286,7 @@ export default function MyBookings() {
                           <QrCode size={16} className="text-primary" /> Digital Pass
                         </motion.button>
                         <motion.button
-                          onClick={() => cancelBooking(booking.id)}
+                          onClick={() => handleCancel(booking.id, booking.source)}
                           className="flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-rose-500/5 text-[10px] font-black text-rose-500 border border-rose-500/10 uppercase tracking-[0.4em] hover:bg-rose-500 hover:text-black transition-all duration-300"
                           whileTap={{ scale: 0.98 }}
                         >
@@ -178,7 +305,7 @@ export default function MyBookings() {
         )}
 
         {/* Archived History */}
-        {pastBookings.length > 0 && (
+        {!isLoading && pastBookings.length > 0 && (
           <div className="w-full">
             <h2 className="text-[11px] font-mono text-white/40 uppercase tracking-[0.5em] mb-12 font-black">Archived Syncs</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -201,7 +328,7 @@ export default function MyBookings() {
                             {booking.roomLabel}
                           </h3>
                           <div className="flex items-center gap-4 mt-2">
-                             <span className="font-mono text-[9px] text-white/10 uppercase tracking-widest font-bold">{booking.purpose || "Standard Lock"}</span>
+                             <span className="font-mono text-[9px] text-white/10 uppercase tracking-widest font-bold">{booking.purpose}</span>
                              <div className="w-1 h-1 rounded-full bg-white/10" />
                              <span className="font-mono text-[9px] text-white/10 uppercase tracking-widest font-bold">{booking.date}</span>
                           </div>
@@ -228,7 +355,7 @@ export default function MyBookings() {
         )}
 
         {/* Null State */}
-        {bookings.length === 0 && (
+        {!isLoading && mergedBookings.length === 0 && (
           <motion.div 
             className="py-32 text-center border border-dashed border-white/10 rounded-[4rem] bg-white/[0.01]"
             initial={{ opacity: 0 }}

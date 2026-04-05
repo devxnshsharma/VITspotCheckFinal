@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Shield, Users, Activity, Layout as LayoutIcon, CalendarCheck, RefreshCcw, ShieldAlert, Zap, Cpu, CheckCircle, AlertTriangle, Database } from "lucide-react"
+import { Shield, Users, Activity, Layout as LayoutIcon, CalendarCheck, RefreshCcw, ShieldAlert, Zap, Cpu, CheckCircle, AlertTriangle, Database, FileText, RotateCcw } from "lucide-react"
 import { useAuthStore } from "@/lib/auth-store"
 import { useRoomStore, useFeedStore, type FeedEvent, type Room } from "@/lib/store"
+import { toast } from "sonner"
 
 type AdminStats = {
   totalBookings: number
@@ -12,6 +13,21 @@ type AdminStats = {
   totalKarmaEvents: number
   totalSpeedtests: number
   totalLayouts: number
+}
+
+interface KarmaLogEntry {
+  id: string
+  userId: string
+  type: string
+  points: number
+  description: string
+  refId: string | null
+  createdAt: string
+  user: {
+    name: string
+    email: string
+    karma: number
+  }
 }
 
 const SHARDS = ['PRP', 'SJT', 'TT', 'AB1', 'AB2', 'SMV', 'MB']
@@ -24,8 +40,15 @@ export function AdminDashboardSection() {
   const rooms = Object.values(roomMap)
   const [isSyncing, setIsSyncing] = useState(false)
   const [systemStatus, setSystemStatus] = useState('NOMINAL')
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'events' | 'reports'>('events')
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'events' | 'karma-log'>('events')
   const [hasMounted, setHasMounted] = useState(false)
+
+  // Issue 7: Karma log state
+  const [karmaLogs, setKarmaLogs] = useState<KarmaLogEntry[]>([])
+  const [karmaLogTotal, setKarmaLogTotal] = useState(0)
+  const [karmaLogPage, setKarmaLogPage] = useState(0)
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false)
+  const [isRecalculating, setIsRecalculating] = useState<string | null>(null)
 
   useEffect(() => {
     setHasMounted(true)
@@ -34,6 +57,54 @@ export function AdminDashboardSection() {
       .then(data => setStats(data.stats))
       .catch(console.error)
   }, [])
+
+  // Issue 7: Fetch karma logs when tab is selected
+  useEffect(() => {
+    if (selectedTab === 'karma-log') {
+      fetchKarmaLogs(0)
+    }
+  }, [selectedTab])
+
+  const fetchKarmaLogs = async (page: number) => {
+    setIsLoadingLogs(true)
+    try {
+      const res = await fetch(`/api/admin/karma-log?page=${page}`)
+      if (res.ok) {
+        const data = await res.json()
+        setKarmaLogs(data.logs)
+        setKarmaLogTotal(data.total)
+        setKarmaLogPage(page)
+      }
+    } catch (e) {
+      console.error('Failed to fetch karma logs:', e)
+    } finally {
+      setIsLoadingLogs(false)
+    }
+  }
+
+  // Issue 7: Recalculate karma for a user
+  const handleRecalculate = async (userId: string, userName: string) => {
+    setIsRecalculating(userId)
+    try {
+      const res = await fetch('/api/admin/recalculate-karma', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(`Recalculated ${userName}: ${data.correctedKarma} karma (${data.tier})`)
+        // Refresh logs
+        fetchKarmaLogs(karmaLogPage)
+      } else {
+        toast.error('Recalculation failed')
+      }
+    } catch {
+      toast.error('Recalculation failed')
+    } finally {
+      setIsRecalculating(null)
+    }
+  }
 
   const handleSystemReboot = () => {
     setIsSyncing(true)
@@ -55,12 +126,21 @@ export function AdminDashboardSection() {
 
   const statCards = [
     { label: 'Active Nodes', value: stats?.totalUsers || 0, icon: Cpu, color: '#6366F1' },
-    { label: 'Available', value: 124, icon: CheckCircle, color: '#10B981' }, // Dummy data mimicking legacy layout
+    { label: 'Available', value: 124, icon: CheckCircle, color: '#10B981' },
     { label: 'Reservations', value: stats?.totalBookings || 0, icon: CalendarCheck, color: '#F59E0B' },
     { label: 'Conflicts', value: 3, icon: AlertTriangle, color: '#F43F5E' },
     { label: 'Architectures', value: stats?.totalLayouts || 0, icon: LayoutIcon, color: '#34D399' },
-    { label: 'Sync Flux', value: karmaEvents.length, icon: Database, color: '#A78BFA' },
+    { label: 'Karma Events', value: stats?.totalKarmaEvents || karmaEvents.length, icon: Database, color: '#A78BFA' },
   ]
+
+  // Compute running totals for karma log
+  const logsWithRunning = (() => {
+    let running = 0
+    return karmaLogs.map(log => {
+      running += log.points
+      return { ...log, runningTotal: log.user.karma }
+    })
+  })()
 
   return (
     <section id="admin" className="min-h-screen py-32 px-6 lg:px-12 flex flex-col justify-center relative overflow-hidden bg-black">
@@ -161,13 +241,13 @@ export function AdminDashboardSection() {
                       <Database size={14} /> Flux Registry
                    </p>
                    <div className="flex gap-4">
-                      {['overview', 'events', 'reports'].map(tab => (
+                      {['overview', 'events', 'karma-log'].map(tab => (
                         <button 
                           key={tab}
                           onClick={() => setSelectedTab(tab as any)}
                           className={`text-[10px] uppercase font-black tracking-widest px-6 py-3 rounded-full border transition-all ${selectedTab === tab ? 'bg-white text-black border-white shadow-lg' : 'text-white/40 border-white/10 hover:border-white/30 hover:text-white'}`}
                         >
-                           {tab}
+                           {tab === 'karma-log' ? 'Karma Log' : tab}
                         </button>
                       ))}
                    </div>
@@ -192,11 +272,89 @@ export function AdminDashboardSection() {
                          </motion.div>
                        ))}
                      </>
-                   ) : selectedTab === 'reports' ? (
-                      <div className="flex flex-col items-center justify-center h-full text-center">
-                        <ShieldAlert size={48} className="text-white/10 mb-4" />
-                        <p className="text-white/20 uppercase tracking-[0.4em] font-mono text-[10px]">No high-priority conflicts in current shard</p>
-                      </div>
+                   ) : selectedTab === 'karma-log' ? (
+                     /* Issue 7: Karma Log Table */
+                     <div className="space-y-4">
+                       {isLoadingLogs ? (
+                         <p className="text-white/30 text-xs italic font-mono animate-pulse">Decrypting karma ledger...</p>
+                       ) : (
+                         <>
+                           {/* Column headers */}
+                           <div className="grid grid-cols-[100px_1fr_80px_1.5fr_80px_80px] gap-3 px-4 text-[9px] uppercase tracking-widest font-black text-white/20 border-b border-white/5 pb-3">
+                             <span>Time</span>
+                             <span>User</span>
+                             <span className="text-right">Delta</span>
+                             <span>Reason</span>
+                             <span>Ref</span>
+                             <span className="text-right">Total</span>
+                           </div>
+
+                           {logsWithRunning.map((log, idx) => (
+                             <motion.div
+                               key={log.id}
+                               initial={{ opacity: 0, x: -10 }}
+                               animate={{ opacity: 1, x: 0 }}
+                               transition={{ delay: idx * 0.02 }}
+                               className="grid grid-cols-[100px_1fr_80px_1.5fr_80px_80px] gap-3 px-4 py-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-colors items-center group"
+                             >
+                               <span className="font-mono text-[9px] text-white/30 tracking-wider">
+                                 {new Date(log.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                               </span>
+                               <div className="min-w-0">
+                                 <p className="text-[10px] font-bold text-white truncate">{log.user.name}</p>
+                                 <p className="text-[8px] text-white/20 truncate font-mono">{log.user.email}</p>
+                               </div>
+                               <span className={`text-right font-mono text-xs font-black ${log.points >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                 {log.points >= 0 ? '+' : ''}{log.points}
+                               </span>
+                               <p className="text-[10px] text-white/50 truncate">{log.description}</p>
+                               <span className="text-[8px] font-mono text-white/15 truncate">
+                                 {log.refId ? `#${log.refId.slice(-6)}` : '—'}
+                               </span>
+                               <div className="flex items-center justify-end gap-2">
+                                 <span className="font-mono text-[10px] text-white/40 font-bold">✦{log.runningTotal}</span>
+                                 {/* Recalculate button on hover */}
+                                 <button
+                                   onClick={() => handleRecalculate(log.userId, log.user.name)}
+                                   disabled={isRecalculating === log.userId}
+                                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-white/10"
+                                   title="Recalculate karma"
+                                 >
+                                   <RotateCcw size={10} className={`text-indigo-400 ${isRecalculating === log.userId ? 'animate-spin' : ''}`} />
+                                 </button>
+                               </div>
+                             </motion.div>
+                           ))}
+
+                           {karmaLogs.length === 0 && (
+                             <p className="text-white/20 text-xs italic font-mono text-center py-8">No karma events in the ledger.</p>
+                           )}
+
+                           {/* Pagination */}
+                           {karmaLogTotal > 50 && (
+                             <div className="flex justify-center gap-4 pt-6 border-t border-white/5">
+                               <button
+                                 onClick={() => fetchKarmaLogs(karmaLogPage - 1)}
+                                 disabled={karmaLogPage === 0}
+                                 className="text-[10px] uppercase font-black tracking-widest px-6 py-3 rounded-full border border-white/10 text-white/40 hover:text-white disabled:opacity-20 transition-all"
+                               >
+                                 ← Previous
+                               </button>
+                               <span className="text-[10px] text-white/30 font-mono self-center">
+                                 Page {karmaLogPage + 1} / {Math.ceil(karmaLogTotal / 50)}
+                               </span>
+                               <button
+                                 onClick={() => fetchKarmaLogs(karmaLogPage + 1)}
+                                 disabled={(karmaLogPage + 1) * 50 >= karmaLogTotal}
+                                 className="text-[10px] uppercase font-black tracking-widest px-6 py-3 rounded-full border border-white/10 text-white/40 hover:text-white disabled:opacity-20 transition-all"
+                               >
+                                 Next →
+                               </button>
+                             </div>
+                           )}
+                         </>
+                       )}
+                     </div>
                    ) : (
                       <div className="space-y-4">
                         {karmaEvents.length === 0 && <p className="text-white/30 text-xs italic font-mono">No recent flux registered.</p>}

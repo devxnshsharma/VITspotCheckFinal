@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft, ArrowRight, Check, Calendar, Clock, MapPin, Users } from "lucide-react"
 import { useRoomStore, useBookingStore, useUIStore, useUserStore } from "@/lib/store"
 import { useAuthStore } from "@/lib/auth-store"
 import { BUILDINGS, TIME_SLOTS } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 export default function BookingPage() {
   const { rooms } = useRoomStore()
@@ -24,7 +26,8 @@ export default function BookingPage() {
   } = useBookingStore()
   const { setDominantColor, showToast } = useUIStore()
   const { currentUser } = useUserStore()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, addKarma } = useAuthStore()
+  const navigate = useNavigate()
 
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null)
   const [purpose, setPurpose] = useState("")
@@ -80,7 +83,10 @@ export default function BookingPage() {
         })
       })
 
-      if (!response.ok) throw new Error("Failed to book")
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ error: 'Booking failed' }))
+        throw new Error(errData.error || 'Booking failed')
+      }
 
       const savedBooking = await response.json()
 
@@ -95,11 +101,14 @@ export default function BookingPage() {
         purpose: purpose || undefined,
       })
       
-      showToast("Booking Confirmed!", "success")
+      // Issue 2: Award karma for booking (server already awarded, sync locally)
+      await addKarma(10, `Room booked: ${room?.name || selectedRoom}`)
+
+      toast.success("Room booked successfully!")
       setBookingStep(5) // Success step
-    } catch (error) {
+    } catch (error: any) {
       console.error(error)
-      showToast("Booking failed. Please try again.", "error")
+      toast.error("Booking failed — " + (error?.message || 'Please try again.'))
     } finally {
       setIsConfirming(false)
     }

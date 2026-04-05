@@ -157,7 +157,6 @@ export const useAuthStore = create<AuthState>()(
 
           // Enforce VIT email restriction
           if (!isVITEmail(email)) {
-            // Sign out the non-VIT user immediately
             await signOut(auth)
             set({ isLoading: false })
             return {
@@ -166,16 +165,35 @@ export const useAuthStore = create<AuthState>()(
             }
           }
 
-          // Build AuthUser from Firebase data, preserving any existing karma
-          const existingUser = get().user
+          // Build AuthUser from Firebase data
           const authUser = firebaseUserToAuthUser(fbUser)
-          
-          // If returning user, preserve their karma and stats
-          if (existingUser && existingUser.email === authUser.email) {
-            authUser.karma = existingUser.karma
-            authUser.trustTier = existingUser.trustTier
-            authUser.verificationsCount = existingUser.verificationsCount
-            authUser.joinedAt = existingUser.joinedAt
+
+          // Issue 1: Sync with backend — detect first-time users
+          let isNewUser = false
+          try {
+            const syncRes = await fetch("/api/users", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, name: authUser.name, image: authUser.avatar }),
+            })
+            if (syncRes.ok) {
+              const profile = await syncRes.json()
+              // Update authUser with server data
+              authUser.karma = profile.karma ?? 100
+              authUser.trustTier = getTierForKarma(profile.karma ?? 100)
+              authUser.joinedAt = profile.joinedAt || authUser.joinedAt
+              isNewUser = profile.isNew === true
+            }
+          } catch (e) {
+            console.error("Backend user sync failed, using local state", e)
+            // Preserve existing karma if returning user
+            const existingUser = get().user
+            if (existingUser && existingUser.email === authUser.email) {
+              authUser.karma = existingUser.karma
+              authUser.trustTier = existingUser.trustTier
+              authUser.verificationsCount = existingUser.verificationsCount
+              authUser.joinedAt = existingUser.joinedAt
+            }
           }
 
           set({
@@ -184,13 +202,23 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           })
 
+          // Issue 1: Fire welcome karma popup for first-time users
+          if (isNewUser) {
+            setTimeout(() => {
+              const { addKarma } = get()
+              // Show the welcome karma toast (points already awarded server-side)
+              set((state) => ({
+                lastKarmaUpdate: { delta: 100, reason: "Welcome to VITspotCheck!", timestamp: Date.now() },
+              }))
+            }, 800)
+          }
+
           return { success: true }
         } catch (error: unknown) {
           set({ isLoading: false })
           const message =
             error instanceof Error ? error.message : "Google sign-in failed"
           
-          // Don't treat popup closed as an error
           if (message.includes("popup-closed-by-user")) {
             return { success: false, error: "" }
           }
