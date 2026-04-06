@@ -66,11 +66,9 @@ This log documents the end-to-end development journey of **VITspotCheck**, a cam
 **Goal:** Optimization, responsiveness, and documentation.
 
 *   **Day 1-3:** **Mobile Responsiveness**
-    *   Refined map touch gestures for iOS/Android.
     *   Implemented a drawer-based navigation for mobile views.
 *   **Day 4-5:** **Performance Optimization**
     *   Optimized SVG map files for <100ms load times.
-    *   Added loading skeletons for data-heavy components.
 *   **Day 6-7:** **Final Documentation**
     *   Updated `README.md` with full setup instructions.
     *   Completed the **Final Action Checklist**.
